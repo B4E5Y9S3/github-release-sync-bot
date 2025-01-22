@@ -31,54 +31,47 @@ def admin_only(func):
             else:
                 await bot.reply_to(message, "Don't be a Punk! Admins only. 😒")
         else:
-            await bot.reply_to(
-                message, "⚠️ This command is only available in groups."
-            )
+            await func(message, *args, **kwargs)
     return wrapper
 
 
-async def add_repo_private(message: Message, text, bot):
-    try:
-        async with aiofiles.open('bot/data/private.json', 'r') as f:
-            group_data = json.loads(await f.read())
-        if str(message.chat.id) not in group_data:
-            print("user not found on the database. adding...")
-            group_data[str(message.chat.id)] = {"tracking": [
-                {"repoURL": text[1], "fileFormat": text[2]}]}
-            async with aiofiles.open('bot/data/private.json', 'w') as f:
-                await f.write(json.dumps(group_data))
-            return await bot.reply_to(message, f"✅ Successfully added the repo to track.")
-        print('user found on the database. updating...')
-        group_data[str(message.chat.id)]["tracking"].append(
-            {"repoURL": text[1], "fileFormat": text[2]})
-        async with aiofiles.open('bot/data/private.json', 'w') as f:
-            await f.write(json.dumps(group_data))
-        await bot.reply_to(message, f"✅ Successfully added the repo to track.")
-
-    except Exception as e:
-        print(e)
-        await bot.reply_to(message, f"❌ Sorry can't track the repo.")
+async def readData(dataName: str):
+    async with aiofiles.open(f'bot/data/{dataName}.json', 'r') as f:
+        return json.loads(await f.read())
 
 
-@admin_only
-async def add_repo_group(message: Message, text, bot):
-    try:
-        async with aiofiles.open('bot/data/group.json', 'r') as f:
-            group_data = json.loads(await f.read())
-        if str(message.chat.id) not in group_data:
-            print("Group ID not found on database. adding...")
-            group_data[str(message.chat.id)] = {"tracking": [
-                {"repoURL": text[1], "fileFormat": text[2]}]}
-            async with aiofiles.open('bot/data/group.json', 'w') as f:
-                await f.write(json.dumps(group_data))
-            return await bot.reply_to(message, f"✅ Successfully added the repo to track.")
-        print('Group ID found on the database. updating...')
-        group_data[str(message.chat.id)]["tracking"].append(
-            {"repoURL": text[1], "fileFormat": text[2]})
-        async with aiofiles.open('bot/data/group.json', 'w') as f:
-            await f.write(json.dumps(group_data))
-        await bot.reply_to(message, f"✅ Successfully added the repo to track.")
+async def updateData(newData: dict, id, dataName: str):
+    data = await readData(dataName)
+    data[str(id)]['tracking'].append(newData)
+    async with aiofiles.open(f'bot/data/{dataName}.json', 'w') as f:
+        await f.write(json.dumps(data))
+    return True
 
-    except Exception as e:
-        print(e)
-        await bot.reply_to(message, f"❌ Sorry can't track the repo.")
+
+async def addNewData(newData: dict, id, dataName: str):
+    data = await readData(dataName)
+    data[str(id)] = {'tracking': [newData]}
+    async with aiofiles.open(f'bot/data/{dataName}.json', 'w') as f:
+        await f.write(json.dumps(data))
+    return True
+
+
+async def removeData(url: str, id, dataName: str):
+    data = await readData(dataName)
+    for key in data[str(id)]['tracking']:
+        if key['repoURL'] == url:
+            data[str(id)]['tracking'].remove(key)
+            async with aiofiles.open(f'bot/data/{dataName}.json', 'w') as f:
+                await f.write(json.dumps(data))
+            return True
+    return False
+
+
+async def isRepoTracked(newData: dict, id, dataName: str):
+    data = await readData(dataName)
+    for key in data[str(id)]['tracking']:
+        return key['repoURL'] == newData['repoURL']
+
+
+def getDatabaseName(chatType): return "group" if chatType in [
+    'group', 'supergroup'] else 'private'

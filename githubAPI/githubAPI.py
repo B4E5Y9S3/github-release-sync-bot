@@ -1,14 +1,18 @@
 import requests
 import re
+
+
 def convertToAPI(url: str) -> str:
     apiUrl = "https://api.github.com/repos/"
     url = url.split("/")
     api = apiUrl + url[3] + "/" + url[4]
     return api
 
+
 def getLatestRelease(url: str) -> str:
     req = requests.get(f"{convertToAPI(url)}/releases/latest")
     return req.json()
+
 
 def getLatestFile(asset: list, fileFormat: str):
     download_url: str = ''
@@ -19,14 +23,12 @@ def getLatestFile(asset: list, fileFormat: str):
 
 
 def validateGithubURL(url: str) -> bool:
-    pattern = re.compile(r'^(https?:\/\/)?(www\.)?github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/?$')
+    pattern = re.compile(
+        r'^(https?:\/\/)?(www\.)?github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/?$')
     return bool(pattern.match(url))
 
-# apiURL = f"{convertToAPI("https://github.com/topjohnwu/Magisk")}"
-# apiURL = f"{convertToAPI("https://github.com/rifsxd/KernelSU-Next")}"
 
-# latestRelease = getLatestRelease(apiURL)
+# latestRelease = getLatestRelease("https://github.com/rifsxd/KernelSU-Next")
+# print(latestRelease)
 # file = getLatestFile(latestRelease['assets'], ".apk")
 # print(file)
-
-

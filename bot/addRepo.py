@@ -1,5 +1,5 @@
 
-from .botHandler import readData, updateData, addNewData, isRepoTracked, admin_only
+from .botHandler import readData, updateData, addNewData, isRepoTracked
 from telebot.types import Message
 
 
@@ -8,7 +8,9 @@ async def add_repo_private(message: Message, text, bot):
     chatID = message.chat.id
     try:
         data = await readData(databaseName)
-        newData = {"repoURL": text[1], "fileFormat": text[2]}
+        print(text[1][-1:text[1].rfind('/')])
+        newData = {"repoName": text[1][text[1].rfind('/') + 1:],
+                   "repoURL": text[1], "fileFormat": text[2]}
         if str(chatID) not in data:
             print("user not found on the database. adding...")
             await addNewData(newData, chatID, databaseName)
@@ -30,7 +32,8 @@ async def add_repo_group(message: Message, text, bot):
     chatID = message.chat.id
     try:
         data = await readData(databaseName)
-        newData = {"repoURL": text[1], "fileFormat": text[2]}
+        newData = {
+            "repoName": text[1][-1:text[1].rfind('/')], "repoURL": text[1], "fileFormat": text[2]}
         if str(chatID) not in data:
             print("Group ID not found on database. adding...")
             await addNewData(newData, chatID, databaseName)

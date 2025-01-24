@@ -5,6 +5,7 @@ import asyncio
 import os
 import aiohttp
 from bot.botSetup import bot
+from bot.commandLock import commandLock, isUserLocked, commandUnlock
 
 
 @bot.message_handler(commands=['start', 'help'])
@@ -54,7 +55,8 @@ async def list_tracking_repos(message: Message):
         return
     message_text = "Tracking the following repositories:\n"
     for repo in repos:
-        message_text += f"`{repo['repoURL']}` - *{repo['fileFormat']}*\n"
+        message_text += f"```{repo['repoName']
+                              } {repo['repoURL']} - {repo['fileFormat']}```\n"
     await bot.reply_to(message, message_text, parse_mode='Markdown')
     return
 
@@ -67,12 +69,18 @@ async def sync_repos(message: Message):
     chatID = message.chat.id
     data = await readData(databaseName)
     repos = data[str(chatID)]['tracking']
+    userLock = isUserLocked(message)
+    if userLock:
+        print(f'{message.from_user.first_name} is locked')
+        userLockMsg = await bot.reply_to(message, "❌ You cannot use this command for now. Let your previous command complete first.")
+        return
 
+    commandLock(message)
     if len(repos) == 0:
         await bot.reply_to(message, "No Repositories are being tracked... start tracking by using `/track` command.", parse_mode='Markdown')
         return
 
-    await bot.reply_to(message, "Syncing the repositories...")
+    syncingMessage = await bot.reply_to(message, "Syncing the repositories...")
 
     for repo in repos:
         latestRelease = getLatestRelease(repo['repoURL'])
@@ -80,7 +88,9 @@ async def sync_repos(message: Message):
             latestRelease['assets'], repo['fileFormat'])
 
         if not downloadURL:
-            await bot.reply_to(message, f"❌ No files found for the repo `{repo['repoURL']}`.")
+            print(f"❌ Files with {repo['fileFormat']} not found on the repo `{
+                  repo['repoURL']}`")
+            await bot.reply_to(message, f"❌ Files with {repo['fileFormat']} not found on the repo `{repo['repoURL']}`", parse_mode='Markdown')
             continue
 
         try:
@@ -92,17 +102,20 @@ async def sync_repos(message: Message):
             os.makedirs("temp", exist_ok=True)
 
             async with aiohttp.ClientSession() as session:
+                print(f"Downloading file from {downloadURL}")
                 async with session.get(downloadURL) as response:
                     if response.status == 200:
                         with open(temp_path, "wb") as file:
                             file.write(await response.read())
                     else:
+                        print('Failed to download file')
                         await bot.reply_to(message, f"❌ Failed to download file from `{repo['repoURL']}`.")
                         continue
 
             # Send the downloaded file to the chat
             with open(temp_path, "rb") as file:
-                await bot.send_document(chatID, file, caption=f"Latest release file for the repo: {repo['repoURL']}")
+                print(f"Sending file to {message.chat.first_name}")
+                await bot.send_document(chatID, file, caption=f"Latest release file for {repo['repoName']}")
 
             # Optionally, clean up the temporary file after sending
             os.remove(temp_path)
@@ -110,7 +123,11 @@ async def sync_repos(message: Message):
         except Exception as e:
             await bot.reply_to(message, f"❌ An error occurred: {e}")
             continue
-
+        finally:
+            await session.close()
+            print('Session closed')
+            commandUnlock(message)
+    await bot.delete_message(chatID, syncingMessage.message_id)
     await bot.reply_to(message, "Syncing Completed!")
 
 if __name__ == '__main__':

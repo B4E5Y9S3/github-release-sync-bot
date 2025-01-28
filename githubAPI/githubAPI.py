@@ -28,6 +28,11 @@ def validateGithubURL(url: str) -> bool:
     return bool(pattern.match(url))
 
 
+def isLatestDownloadUrl(url: str, fileFormat: str, prevDownloadURL) -> bool:
+    latestRelease = getLatestRelease(url)
+    latestFile = getLatestFile(latestRelease['assets'], fileFormat)
+    return latestFile == prevDownloadURL
+
 # latestRelease = getLatestRelease("https://github.com/rifsxd/KernelSU-Next")
 # print(latestRelease)
 # file = getLatestFile(latestRelease['assets'], ".apk")

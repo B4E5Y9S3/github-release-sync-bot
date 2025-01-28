@@ -6,7 +6,7 @@ import json
 log = True
 
 
-def print_log(message):
+def print_log(message: Message):
     if not log:
         return
     print(f"{message.text} - {message.from_user.username} - {message.chat.id}")
@@ -22,7 +22,7 @@ async def is_user_admin(chat_id, from_user_id):
 
 def admin_only(func):
     @wraps(func)
-    async def wrapper(message, *args, **kwargs):
+    async def wrapper(message: Message, *args, **kwargs):
         if message.chat.type != "private":  # Ensure it's a group chat
             is_admin = await is_user_admin(message.chat.id, message.from_user.id)
             if is_admin:
@@ -40,7 +40,7 @@ async def readData(dataName: str):
         return json.loads(await f.read())
 
 
-async def updateData(newData: dict, id, dataName: str):
+async def addMoreData(newData: dict, id, dataName: str):
     data = await readData(dataName)
     data[str(id)]['tracking'].append(newData)
     async with aiofiles.open(f'bot/data/{dataName}.json', 'w') as f:

@@ -1,16 +1,19 @@
 
-from .botHandler import readData, updateData, addNewData, isRepoTracked
+from .botHandler import readData, addMoreData, addNewData, isRepoTracked
 from telebot.types import Message
+from githubAPI import getLatestFile, getLatestRelease
 
 
 async def add_repo_private(message: Message, text, bot):
     databaseName = 'private'
     chatID = message.chat.id
+    latestRelease = getLatestRelease(text[1])
+    downloadURL = getLatestFile(
+        latestRelease['assets'], text[2])
     try:
         data = await readData(databaseName)
-        print(text[1][-1:text[1].rfind('/')])
         newData = {"repoName": text[1][text[1].rfind('/') + 1:],
-                   "repoURL": text[1], "fileFormat": text[2]}
+                   "repoURL": text[1], "fileFormat": text[2], "lastSync": '', "downloadURL": downloadURL}
         if str(chatID) not in data:
             print("user not found on the database. adding...")
             await addNewData(newData, chatID, databaseName)
@@ -19,7 +22,7 @@ async def add_repo_private(message: Message, text, bot):
         if repoTracked:
             return await bot.reply_to(message, f"❌ Repo already being tracked.")
         print('user found on the database. updating...')
-        await updateData(newData, chatID, databaseName)
+        await addMoreData(newData, chatID, databaseName)
         await bot.reply_to(message, f"✅ Successfully added the repo to track.")
 
     except Exception as e:
@@ -30,10 +33,13 @@ async def add_repo_private(message: Message, text, bot):
 async def add_repo_group(message: Message, text, bot):
     databaseName = 'group'
     chatID = message.chat.id
+    latestRelease = getLatestRelease(text[1])
+    downloadURL = getLatestFile(
+        latestRelease['assets'], text[2])
     try:
         data = await readData(databaseName)
-        newData = {
-            "repoName": text[1][-1:text[1].rfind('/')], "repoURL": text[1], "fileFormat": text[2]}
+        newData = {"repoName": text[1][text[1].rfind('/') + 1:],
+                   "repoURL": text[1], "fileFormat": text[2], "lastSync": '', "downloadURL": downloadURL, "chatUploadLink": ''}
         if str(chatID) not in data:
             print("Group ID not found on database. adding...")
             await addNewData(newData, chatID, databaseName)
@@ -42,7 +48,7 @@ async def add_repo_group(message: Message, text, bot):
         if repoTracked:
             return await bot.reply_to(message, f"❌ Repo already being tracked.")
         print('Group ID found on the database. updating...')
-        await updateData(newData, chatID, databaseName)
+        await addMoreData(newData, chatID, databaseName)
         await bot.reply_to(message, f"✅ Successfully added the repo to track.")
 
     except Exception as e:

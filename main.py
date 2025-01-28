@@ -1,26 +1,28 @@
 from bot import print_log, add_repo_private, add_repo_group, readData, removeData, getDatabaseName, admin_only
-from githubAPI import validateGithubURL, getLatestRelease, getLatestFile
-from telebot.types import Message
+from githubAPI import validateGithubURL, isLatestDownloadUrl
+from telebot.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 import asyncio
 import os
 import aiohttp
 from bot.botSetup import bot
 from bot.commandLock import commandLock, isUserLocked, commandUnlock
+import json
+import aiofiles
 
 
 @bot.message_handler(commands=['start', 'help'])
 async def send_welcome(message):
-    await bot.send_message(message.chat.id, "Hello, I am a bot help to sync the Github repo releases file synchronizer!")
+    await bot.send_message(message.chat.id, "Hello, I am a bot Designed to help syncing the Github repo releases files!")
 
 
 @bot.message_handler(commands=['track'])
 @admin_only
 async def add_repo(message: Message):
+    print_log(message)
     text = message.text.split(' ')
     if len(text) < 2 or not validateGithubURL(text[1]):
         await bot.reply_to(message, f"""❌ Please provide the correct repository name and File Extension separated by space. Example:\n `/track https://github.com/username/repo_name .apk`""", parse_mode='Markdown')
         return
-    print_log(message)
     if message.chat.type == "private":
         await add_repo_private(message, text, bot)
         return
@@ -32,6 +34,7 @@ async def add_repo(message: Message):
 @bot.message_handler(commands=['untrack'])
 @admin_only
 async def remove_repo(message: Message):
+    print_log(message)
     chatID = message.chat.id
     text = message.text.split(' ')
     if len(text) < 2:
@@ -41,17 +44,21 @@ async def remove_repo(message: Message):
     if not removedData:
         await bot.reply_to(message, f"Repository {text[1]} is not being tracked.")
         return
-    print_log(message)
     await bot.reply_to(message, f"Repository `{text[1]}` removed from tracking list.", parse_mode='Markdown')
 
 
 @bot.message_handler(commands=['list'])
 async def list_tracking_repos(message: Message):
+    print_log(message)
     databaseName = getDatabaseName(message.chat.type)
     data: dict = await readData(databaseName)
+    noRepoMsg = "No Repositories are being tracked... start tracking by using `/track` command."
+    if not data or str(message.chat.id) not in data:
+        await bot.reply_to(message, noRepoMsg, parse_mode='Markdown')
+        return
     repos = data[str(message.chat.id)]['tracking']
     if str(message.chat.id) not in data or len(repos) == 0:
-        await bot.reply_to(message, "No Repositories are being tracked... start tracking by using `/track` command.", parse_mode='Markdown')
+        await bot.reply_to(message, noRepoMsg, parse_mode='Markdown')
         return
     message_text = "Tracking the following repositories:\n"
     for repo in repos:
@@ -70,9 +77,12 @@ async def sync_repos(message: Message):
     data = await readData(databaseName)
     repos = data[str(chatID)]['tracking']
     userLock = isUserLocked(message)
+    chatInfo = await bot.get_chat(chatID)
     if userLock:
         print(f'{message.from_user.first_name} is locked')
         userLockMsg = await bot.reply_to(message, "❌ You cannot use this command for now. Let your previous command complete first.")
+        await asyncio.sleep(3)
+        await bot.delete_message(chatID, userLockMsg.message_id)
         return
 
     commandLock(message)
@@ -82,10 +92,16 @@ async def sync_repos(message: Message):
 
     syncingMessage = await bot.reply_to(message, "Syncing the repositories...")
 
-    for repo in repos:
-        latestRelease = getLatestRelease(repo['repoURL'])
-        downloadURL = getLatestFile(
-            latestRelease['assets'], repo['fileFormat'])
+    for index, repo in enumerate(repos):
+        downloadURL = repo['downloadURL']
+        if downloadURL and message.chat.type != "private" and isLatestDownloadUrl(repo['repoURL'], repo['fileFormat'], downloadURL) and repo['chatUploadLink'] != '':
+            print(f"✅ No new files found for {repo['repoName']}")
+            keyboard = InlineKeyboardMarkup()
+            button = InlineKeyboardButton(
+                "Open Link", url=repo['chatUploadLink'])
+            keyboard.add(button)
+            await bot.send_message(chatID, f"Latest file already uploaded.\n```{repo['repoName']} {repo['repoURL']}```", parse_mode='Markdown', reply_markup=keyboard)
+            continue
 
         if not downloadURL:
             print(f"❌ Files with {repo['fileFormat']} not found on the repo `{
@@ -115,7 +131,11 @@ async def sync_repos(message: Message):
             # Send the downloaded file to the chat
             with open(temp_path, "rb") as file:
                 print(f"Sending file to {message.chat.first_name}")
-                await bot.send_document(chatID, file, caption=f"Latest release file for {repo['repoName']}")
+                fileSendingMsg = await bot.send_document(chatID, file, caption=f"Latest release file for {repo['repoName']}")
+                async with aiofiles.open(f"bot/data/{databaseName}.json", 'w') as f:
+                    data[str(
+                        chatID)]['tracking'][index]['chatUploadLink'] = f"https://t.me/{chatInfo.username}/{fileSendingMsg.message_id}"
+                    await f.write(json.dumps(data))
 
             # Optionally, clean up the temporary file after sending
             os.remove(temp_path)
@@ -126,9 +146,10 @@ async def sync_repos(message: Message):
         finally:
             await session.close()
             print('Session closed')
-            commandUnlock(message)
     await bot.delete_message(chatID, syncingMessage.message_id)
     await bot.reply_to(message, "Syncing Completed!")
+    commandUnlock(message)
+
 
 if __name__ == '__main__':
     print('bot initialized...')

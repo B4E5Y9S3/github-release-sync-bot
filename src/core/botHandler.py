@@ -1,15 +1,8 @@
 from telebot.types import Message
 from functools import wraps
-from bot.botSetup import bot
+from src.core.botSetup import bot
 import aiofiles
 import json
-log = True
-
-
-def print_log(message: Message):
-    if not log:
-        return
-    print(f"{message.text} - {message.from_user.username} - {message.chat.id}")
 
 
 async def is_user_admin(chat_id, from_user_id):
@@ -36,14 +29,14 @@ def admin_only(func):
 
 
 async def readData(dataName: str):
-    async with aiofiles.open(f'bot/data/{dataName}.json', 'r') as f:
+    async with aiofiles.open(f'src/data/{dataName}.json', 'r') as f:
         return json.loads(await f.read())
 
 
 async def addMoreData(newData: dict, id, dataName: str):
     data = await readData(dataName)
     data[str(id)]['tracking'].append(newData)
-    async with aiofiles.open(f'bot/data/{dataName}.json', 'w') as f:
+    async with aiofiles.open(f'src/data/{dataName}.json', 'w') as f:
         await f.write(json.dumps(data))
     return True
 
@@ -51,7 +44,7 @@ async def addMoreData(newData: dict, id, dataName: str):
 async def addNewData(newData: dict, id, dataName: str):
     data = await readData(dataName)
     data[str(id)] = {'tracking': [newData]}
-    async with aiofiles.open(f'bot/data/{dataName}.json', 'w') as f:
+    async with aiofiles.open(f'src/data/{dataName}.json', 'w') as f:
         await f.write(json.dumps(data))
     return True
 
@@ -61,7 +54,7 @@ async def removeData(url: str, id, dataName: str):
     for key in data[str(id)]['tracking']:
         if key['repoURL'] == url:
             data[str(id)]['tracking'].remove(key)
-            async with aiofiles.open(f'bot/data/{dataName}.json', 'w') as f:
+            async with aiofiles.open(f'src/data/{dataName}.json', 'w') as f:
                 await f.write(json.dumps(data))
             return True
     return False

@@ -1,4 +1,3 @@
-
 from .botHandler import readData, addMoreData, addNewData, isRepoTracked
 from telebot.types import Message
 from githubAPI import getLatestFile, getLatestRelease
